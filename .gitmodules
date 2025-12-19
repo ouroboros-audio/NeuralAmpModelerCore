@@ -1,3 +1,6 @@
 [submodule "Dependencies/eigen"]
 	path = Dependencies/eigen
 	url = https://ouroboros-audio@github.com/ouroboros-audio/eigen
+[submodule "Dependencies/json"]
+	path = Dependencies/json
+	url = https://github.com/ouroboros-audio/json

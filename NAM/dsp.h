@@ -10,7 +10,7 @@
 #include <Eigen/Dense>
 
 #include "activations.h"
-#include "json.hpp"
+#include <nlohmann/json.hpp>
 
 #ifdef NAM_SAMPLE_FLOAT
   #define NAM_SAMPLE float

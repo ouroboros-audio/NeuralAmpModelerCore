@@ -8,7 +8,7 @@ add_custom_target(tools ALL
 
 include_directories(tools ..)
 include_directories(tools ${NAM_DEPS_PATH}/eigen)
-include_directories(tools ${NAM_DEPS_PATH}/nlohmann)
+include_directories(tools ${NAM_DEPS_PATH}/json/single_include)
 
 add_executable(loadmodel loadmodel.cpp ${NAM_SOURCES})
 add_executable(benchmodel benchmodel.cpp ${NAM_SOURCES})

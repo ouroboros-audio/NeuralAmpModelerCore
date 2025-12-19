@@ -5,7 +5,7 @@
 
 #include "dsp.h"
 #include "registry.h"
-#include "json.hpp"
+#include <nlohmann/json.hpp>
 #include "lstm.h"
 #include "convnet.h"
 #include "wavenet.h"
