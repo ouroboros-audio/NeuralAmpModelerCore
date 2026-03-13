@@ -13,6 +13,45 @@
 
 namespace nam
 {
+namespace
+{
+void maybe_promote_tanh_activation(nlohmann::json& node, const bool useFastTanh)
+{
+  if (!useFastTanh || !node.is_object())
+    return;
+  auto it = node.find("activation");
+  if (it != node.end() && it->is_string() && it->get_ref<const std::string&>() == "Tanh")
+    *it = "Fasttanh";
+}
+
+void apply_fast_tanh_overrides(dspData& conf, const bool useFastTanh)
+{
+  if (!useFastTanh || !conf.config.is_object())
+    return;
+
+  if (conf.architecture == "LSTM" || conf.architecture == "CatLSTM")
+  {
+    conf.config["use_fast_tanh"] = true;
+    return;
+  }
+
+  if (conf.architecture == "ConvNet")
+  {
+    maybe_promote_tanh_activation(conf.config, true);
+    return;
+  }
+
+  if (conf.architecture == "WaveNet" || conf.architecture == "CatWaveNet")
+  {
+    if (auto it = conf.config.find("layers"); it != conf.config.end() && it->is_array())
+      for (auto& layer : *it)
+        maybe_promote_tanh_activation(layer, true);
+    if (auto it = conf.config.find("head"); it != conf.config.end())
+      maybe_promote_tanh_activation(*it, true);
+  }
+}
+} // namespace
+
 struct Version
 {
   int major;
@@ -87,6 +126,11 @@ std::unique_ptr<DSP> get_dsp(const std::filesystem::path config_filename)
 
 std::unique_ptr<DSP> get_dsp(const std::filesystem::path config_filename, dspData& returnedConfig)
 {
+  return get_dsp(config_filename, returnedConfig, activations::Activation::using_fast_tanh);
+}
+
+std::unique_ptr<DSP> get_dsp(const std::filesystem::path config_filename, dspData& returnedConfig, const bool useFastTanh)
+{
   if (!std::filesystem::exists(config_filename))
     throw std::runtime_error("Config file doesn't exist!\n");
   std::ifstream i(config_filename);
@@ -112,7 +156,7 @@ std::unique_ptr<DSP> get_dsp(const std::filesystem::path config_filename, dspDat
    We need to return unmodified version of dsp_config via returnedConfig.*/
   dspData conf = returnedConfig;
 
-  return get_dsp(conf);
+  return get_dsp(conf, useFastTanh);
 }
 
 struct OptionalValue
@@ -123,12 +167,19 @@ struct OptionalValue
 
 std::unique_ptr<DSP> get_dsp(dspData& conf)
 {
+  return get_dsp(conf, activations::Activation::using_fast_tanh);
+}
+
+std::unique_ptr<DSP> get_dsp(dspData& conf, const bool useFastTanh)
+{
   verify_config_version(conf.version);
 
   auto& architecture = conf.architecture;
   nlohmann::json& config = conf.config;
   std::vector<float>& weights = conf.weights;
   OptionalValue loudness, inputLevel, outputLevel;
+
+  apply_fast_tanh_overrides(conf, useFastTanh);
 
   auto AssignOptional = [&conf](const std::string key, OptionalValue& v) {
     if (conf.metadata.find(key) != conf.metadata.end())

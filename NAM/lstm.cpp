@@ -6,8 +6,10 @@
 #include "registry.h"
 #include "lstm.h"
 
-nam::lstm::LSTMCell::LSTMCell(const int input_size, const int hidden_size, std::vector<float>::iterator& weights)
+nam::lstm::LSTMCell::LSTMCell(const int input_size, const int hidden_size, std::vector<float>::iterator& weights,
+                              const bool useFastTanh)
 {
+  this->_useFastTanh = useFastTanh;
   // Resize arrays
   this->_w.resize(4 * hidden_size, input_size + hidden_size);
   this->_b.resize(4 * hidden_size);
@@ -43,16 +45,16 @@ void nam::lstm::LSTMCell::process_(const Eigen::VectorXf& x)
   const long o_offset = 3 * hidden_size;
   const long h_offset = input_size;
 
-  if (activations::Activation::using_fast_tanh)
+  if (this->_useFastTanh)
   {
     for (auto i = 0; i < hidden_size; i++)
       this->_c[i] =
-        activations::fast_sigmoid(this->_ifgo[i + f_offset]) * this->_c[i]
-        + activations::fast_sigmoid(this->_ifgo[i + i_offset]) * activations::fast_tanh(this->_ifgo[i + g_offset]);
+        activations::sigmoid(this->_ifgo[i + f_offset]) * this->_c[i]
+        + activations::sigmoid(this->_ifgo[i + i_offset]) * activations::fast_tanh(this->_ifgo[i + g_offset]);
 
     for (int i = 0; i < hidden_size; i++)
       this->_xh[i + h_offset] =
-        activations::fast_sigmoid(this->_ifgo[i + o_offset]) * activations::fast_tanh(this->_c[i]);
+        activations::sigmoid(this->_ifgo[i + o_offset]) * activations::fast_tanh(this->_c[i]);
   }
   else
   {
@@ -66,13 +68,13 @@ void nam::lstm::LSTMCell::process_(const Eigen::VectorXf& x)
 }
 
 nam::lstm::LSTM::LSTM(const int num_layers, const int input_size, const int hidden_size, std::vector<float>& weights,
-                      const double expected_sample_rate)
+                      const double expected_sample_rate, const bool useFastTanh)
 : DSP(expected_sample_rate)
 {
   this->_input.resize(1);
   std::vector<float>::iterator it = weights.begin();
   for (int i = 0; i < num_layers; i++)
-    this->_layers.push_back(LSTMCell(i == 0 ? input_size : hidden_size, hidden_size, it));
+    this->_layers.push_back(LSTMCell(i == 0 ? input_size : hidden_size, hidden_size, it, useFastTanh));
   this->_head_weight.resize(hidden_size);
   for (int i = 0; i < hidden_size; i++)
     this->_head_weight[i] = *(it++);
@@ -112,7 +114,9 @@ std::unique_ptr<nam::DSP> nam::lstm::Factory(const nlohmann::json& config, std::
   const int num_layers = config["num_layers"];
   const int input_size = config["input_size"];
   const int hidden_size = config["hidden_size"];
-  return std::make_unique<nam::lstm::LSTM>(num_layers, input_size, hidden_size, weights, expectedSampleRate);
+  const bool useFastTanh = config.value("use_fast_tanh", activations::Activation::using_fast_tanh);
+  return std::make_unique<nam::lstm::LSTM>(
+    num_layers, input_size, hidden_size, weights, expectedSampleRate, useFastTanh);
 }
 
 // Register the factory
